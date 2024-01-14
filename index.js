@@ -5,7 +5,7 @@ const session = require("express-session");
 const bcrypt = require("bcrypt");
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3001;
 
 const dbUrl = "mongodb+srv://owner:tjuZJwlqmYSAzPEI@atn.qyuce32.mongodb.net/?retryWrites=true&w=majority";
 
@@ -22,12 +22,12 @@ mongoose.connect(dbUrl, connectionParams)
     console.log("Error:", e);
   });
 
-const userSchema = new mongoose.Schema({
+const userCustomerSchema  = new mongoose.Schema({
   username: String,
   password: String,
 });
 
-const User = mongoose.model("User", userSchema);
+const UserCustomer = mongoose.model("UserCustomer", userCustomerSchema);
 
 const bookSchema = new mongoose.Schema({
   title: String,
@@ -47,7 +47,7 @@ app.use(session({
   saveUninitialized: true,
 }));
 
-// Middleware để kiểm tra xem người dùng đã đăng nhập chưa
+
 const requireLogin = (req, res, next) => {
   if (req.session.userId) {
     next();
@@ -68,19 +68,20 @@ app.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
   try {
-    const user = await User.findOne({ username });
+    const user = await UserCustomer.findOne({ username });
 
     if (user && await bcrypt.compare(password, user.password)) {
       req.session.userId = user._id;
-      res.redirect("/dashboard");
+      res.redirect("/");
     } else {
-      res.status(401).send("Tên đăng nhập hoặc mật khẩu không đúng");
+      res.status(401).send("Username or password is incorrect");
     }
   } catch (error) {
     console.error("Error:", error);
-    res.status(500).send("Lỗi máy chủ");
+    res.status(500).send("Server error");
   }
 });
+
 
 app.get("/register", (req, res) => {
   res.sendFile(__dirname + "/register.html");
@@ -90,19 +91,19 @@ app.post("/register", async (req, res) => {
   const { username, password } = req.body;
 
   try {
-    const existingUser = await User.findOne({ username });
+    const existingUser = await UserCustomer.findOne({ username });
 
     if (existingUser) {
-      res.status(400).send("Tên đăng nhập đã tồn tại");
+      res.status(400).send("Username available");
     } else {
       const hashedPassword = await bcrypt.hash(password, 10);
-      const newUser = new User({ username, password: hashedPassword });
+      const newUser = new UserCustomer({ username, password: hashedPassword });
       await newUser.save();
-      res.status(200).send("Đăng ký thành công. Đăng nhập để tiếp tục.");
+      res.status(200).send("Sign Up Success. Log in to continue.");
     }
   } catch (error) {
     console.error("Error:", error);
-    res.status(500).send("Lỗi máy chủ");
+    res.status(500).send("Server error");
   }
 });
 
@@ -113,7 +114,7 @@ app.get("/get-recent-books", async (req, res) => {
       const recentBooks = await Book.find({}).sort({ _id: -1 }).limit(10);
       res.status(200).json(recentBooks);
   } catch (error) {
-      res.status(500).json({ message: "Lỗi máy chủ" });
+      res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -137,6 +138,30 @@ app.get("/detailBook.html", (req, res) => {
   res.sendFile(__dirname + "/detailBook.html");
 });
 
+app.get("/search", async (req, res) => {
+  const searchTerm = req.query.query;
+
+  try {
+
+    const searchResults = await Book.find({ title: { $regex: new RegExp(searchTerm, 'i') } });
+
+    res.status(200).json(searchResults);
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.post("/logout", (req, res) => {
+  req.session.destroy((err) => {
+      if (err) {
+          console.error("Error:", err);
+      } else {
+          res.redirect("/");
+      }
+  });
+});
+
 app.listen(port, () => {
-  console.log(`Ứng dụng đang chạy tại http://localhost:${port}`);
+  console.log(`The application is running at http://localhost:${port}`);
 });
